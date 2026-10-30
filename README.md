@@ -7,7 +7,7 @@ qualifies them, enriches their profiles, writes a personalised email and Instagr
 an LLM (Groq), and tracks every contact attempt in a review dashboard. **Nothing is sent automatically**: email
 actions are simulated by default and Instagram DMs are always sent manually by the user.
 
-![Dashboard overview](docs/screenshots/dashboard-overview.png)
+![Dashboard overview](screenshots/dashboard-overview.png)
 
 ## Results at a glance
 
@@ -64,7 +64,7 @@ Each creator is evaluated against the qualification criteria and stored with:
 The dashboard shows the result and the reasons for any creator under **Why this creator did or did not qualify**, and
 can filter by qualification. Only `PASS` creators (53) are ever given messages or outreach actions.
 
-![Creator review](docs/screenshots/creator-review.png)
+![Creator review](screenshots/creator-review.png)
 
 ## Enrichment process
 
@@ -119,7 +119,7 @@ Only the selected creator is processed, using the same prompt, validation, retri
 to `data/messages.json` and the tracker is refreshed. A failed regeneration never replaces a valid message, and no
 Groq call happens unless a button is clicked.
 
-![Message preview](docs/screenshots/message-preview.png)
+![Message preview](screenshots/message-preview.png)
 
 ## Sending mechanism
 
@@ -134,7 +134,7 @@ Groq call happens unless a button is clicked.
   address (case-insensitive). A repeat attempt is rejected, and the dashboard disables the button with
   "This email has already been recorded, so it cannot be repeated." Re-importing data never resets statuses.
 
-![Outreach history](docs/screenshots/outreach-history.png)
+![Outreach history](screenshots/outreach-history.png)
 
 ## Architecture
 
