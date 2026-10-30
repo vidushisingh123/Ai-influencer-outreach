@@ -1,0 +1,9 @@
+pandas>=2.2
+pydantic>=2.7
+requests>=2.32
+python-dotenv>=1.0
+pytest>=8.0
+groq>=0.11
+fastapi>=0.110
+uvicorn>=0.29
+streamlit>=1.50

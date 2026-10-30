@@ -1,0 +1,36 @@
+{
+  "total_discovered": 391,
+  "in_follower_range_and_enriched": 120,
+  "passed": 53,
+  "failed": 338,
+  "passed_with_email": 24,
+  "fail_counts": {
+    "platform": 0,
+    "followers": 271,
+    "engagement": 46,
+    "niche_relevance": 26,
+    "activity": 0,
+    "brand_safety": 0,
+    "geography": 0
+  },
+  "niche": "Fashion & Beauty",
+  "source": "YouTube Data API v3 (official API)",
+  "generated_at": "2026-10-29T04:49:00.807649+00:00",
+  "api_search_calls_made": 0,
+  "api_calls_made": 0,
+  "rejected_by_validation": 0,
+  "criteria": {
+    "platforms": [
+      "YouTube"
+    ],
+    "min_followers": 5000,
+    "max_followers": 100000,
+    "min_engagement": 0.02,
+    "min_engagement_videos": 3,
+    "min_niche_share": 0.4,
+    "max_days_since_upload": 90,
+    "allowed_countries": null
+  },
+  "meets_50_discovered": true,
+  "meets_50_qualified": true
+}

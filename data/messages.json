@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-10-30T11:50:59.432906+00:00",
+  "model": "openai/gpt-oss-120b",
+  "word_limits": {
+    "email": [
+      60,
+      90
+    ],
+    "dm": [
+      15,
+      30
+    ]
+  },
+  "messages": [
+    {
+      "channel_id": "UC2OBxE5Kq-BYpOrqtWBIjnA",
+      "name": "Nisha Sharma",
+      "contact_email": "Not Found",
+      "subject": "Collaboration Opportunity with StyleNest",
+      "email": "Hi Nisha Sharma,\n\nI’m Vidushi from StyleNest. I noticed your recent video \"Amazon Haircare Finds✨😍💯\" and love how you showcase genuine product experiences. We’re looking to partner with creators like you for authentic UGC content that highlights fashion and beauty items. Would you be interested in discussing a collaboration that aligns with your makeup and haircare focus?\n\nLooking forward to hearing from you.\n\nBest regards,\nVidushi",
+      "dm": "Hey Nisha! Loved your \"Amazon Haircare Finds✨😍💯\" video. Interested in a StyleNest UGC collab? Let’s chat!",
+      "email_word_count": 66,
+      "dm_word_count": 16,
+      "source": "llm",
+      "validation_status": "valid",
+      "attempts": 2,
+      "model": "openai/gpt-oss-120b",
+      "error": null,
+      "generated_at": "2026-10-30T11:50:59.432184+00:00"
+    }
+  ]
+}
