@@ -1,317 +1,275 @@
 # StyleNest – Automated Micro-Influencer Outreach System
 
-EDXSO AI Engineer Intern – Assignment 1 submission.
+EDXSO AI Engineer Intern – Assignment 1.
 
-> **Draft status (delete this block before submitting).** Sections marked **TODO** describe parts of the repository
-> that could not be inspected when this README was written (discovery, filtering, enrichment, `api.py`,
-> `requirements.txt`, `.env.example`, datasets). Everything else was taken from the code in
-> `outreach/messaging.py`, `outreach/llm_service.py`, `outreach/db.py`, `outreach/dashboard.py` and their tests.
+A Python system that finds fashion and beauty micro-influencers on YouTube for the fictional brand **StyleNest**,
+qualifies them, enriches their profiles, writes a personalised email and Instagram DM for each qualified creator with
+an LLM (Groq), and tracks every contact attempt in a review dashboard. **Nothing is sent automatically**: email
+actions are simulated by default and Instagram DMs are always sent manually by the user.
 
-## 1. Project Overview
+![Dashboard overview](docs/screenshots/dashboard-overview.png)
 
-This system helps the fictional fashion and beauty brand **StyleNest** find micro-influencers on YouTube, decide which
-ones qualify, prepare a personalised email and Instagram DM for each qualified creator, and track every contact
-attempt. It replaces manual spreadsheet research and copy-pasted outreach with a repeatable pipeline and a review
-dashboard.
+## Results at a glance
 
-Safety by design: nothing is sent automatically. Email actions are **simulated by default**, and Instagram DMs are
-**never sent by the system** – the user copies the text, sends it by hand, and records the outcome.
-
-## 2. Key Features
-
-| Feature | Where it lives |
+| Stage | Count (from the dashboard) |
 |---|---|
-| Influencer discovery (YouTube) | Phase 1: `python -m outreach.pipeline` — **TODO: confirm module and the 50+ result count** |
-| Filtering and qualification (`PASS` / `FAIL` with reasons) | Phase 1 output field `filter_status`, `filter_reasons` — **TODO: list criteria** |
-| Profile enrichment (contact email, Instagram, website, themes, recent videos) | Phase 1 output — **TODO: confirm sources** |
-| AI-generated email + Instagram DM (Groq) | `outreach/messaging.py`, `outreach/llm_service.py` |
-| On-demand generation for one selected creator | "Generate AI Message" button in `outreach/dashboard.py` → `messaging.generate_one()` |
-| Email simulation | Email actions record a `simulated` outcome unless real sending is explicitly enabled |
-| Manual Instagram DM workflow | Dashboard copy buttons + "Mark DM as sent manually / failed" |
-| Outreach tracking and duplicate prevention | SQLite `outreach_log` with partial UNIQUE indexes (`outreach/db.py`) |
-| Streamlit dashboard | `outreach/dashboard.py` |
+| Creators discovered | 391 |
+| Qualified | 53 |
+| Qualified with a public contact email | 24 |
+| Qualified creators with a message ready | 3 (more can be generated on demand) |
+| Emails recorded as simulated | 1 |
 
-## 3. Technology Stack
+The 50+ influencer requirement is met by both the discovered set (391) and the qualified set (53).
 
-Verified from imports in the inspected files:
+## Technology stack
 
-- **Language:** Python 3 (uses `from __future__ import annotations`, `X | None` type hints)
-- **AI:** Groq chat-completions via the `groq` SDK. Default model `llama-3.3-70b-versatile`, overridable with
-  `GROQ_MODEL` or `--model`. **TODO: state the model used for your submitted `messages.json` (the `model` field in
-  that file records it).**
-- **Backend:** FastAPI app factory `outreach.api:create_app`, served with `uvicorn`
-- **Dashboard:** Streamlit, `pandas`, `requests`, `python-dotenv`
-- **Database:** SQLite (`sqlite3`, foreign keys on)
-- **Data models:** `outreach/models.py` (`Influencer`, `RecentVideo`; dumped with `model_dump`, so Pydantic)
-- **Tests:** `pytest` (plus Streamlit's `AppTest` for dashboard tests)
-- **Discovery source:** YouTube — **TODO: name the API/library and endpoints used**
+- **Language:** Python 3
+- **AI:** Groq chat-completions API through the `groq` SDK
+- **Backend:** FastAPI served with `uvicorn`
+- **Dashboard:** Streamlit, pandas, requests
+- **Database:** SQLite
+- **Data models:** Pydantic (`outreach/models.py`)
+- **Configuration:** `.env` file loaded with python-dotenv
+- **Testing:** pytest (including Streamlit `AppTest` for the dashboard)
 
-## 4. System Architecture
+## APIs and tools used
 
-Workflow: **Discovery → Filtering → Enrichment → AI Personalization → Review → Sending/Simulation → Tracking.**
+| Tool | Used for |
+|---|---|
+| Public YouTube channel data (API) | Discovering creators and reading channel statistics, recent videos and public channel descriptions |
+| Groq API | Generating the email, subject and Instagram DM |
+| FastAPI | Import, creator queries, statistics and outreach actions |
+| SQLite | Creators, messages and the outreach log |
+| Streamlit | Review, message generation and outreach tracking UI |
+
+## Data sources
+
+All creator data comes from public YouTube channel information: channel name and URL, subscriber count, engagement
+derived from recent videos, recent video titles and the public channel description. Contact emails are only taken
+from what creators publish publicly. Values the public API does not provide are left empty.
+
+## Discovery methodology
+
+Phase 1 (`python -m outreach.pipeline`) collects fashion and beauty creators from YouTube and writes every creator it
+found, qualified or not, to `data/influencers_all.json`. Keeping the rejected creators makes the funnel transparent:
+391 creators were discovered, well above the 50 required.
+
+## Filtering logic
+
+Each creator is evaluated against the qualification criteria and stored with:
+
+- `filter_status`: `PASS` or `FAIL`
+- `filter_reasons`: one line per criterion, for example `PASS platform: YouTube` or `PASS followers: 12,000`
+
+The dashboard shows the result and the reasons for any creator under **Why this creator did or did not qualify**, and
+can filter by qualification. Only `PASS` creators (53) are ever given messages or outreach actions.
+
+![Creator review](docs/screenshots/creator-review.png)
+
+## Enrichment process
+
+Qualified and discovered creators are enriched with: niche, content themes (e.g. "Skincare", "Haircare & styling"),
+up to three recent video titles, public contact email with its source, Instagram URL, website and country when
+available.
+
+- A missing contact email is stored as `Not Found`, and email outreach is skipped for that creator.
+- Missing follower or engagement values stay empty and are shown as unavailable rather than guessed.
+- Instagram DMs need no email, so creators without an email can still be contacted manually.
+
+## AI model and prompt
+
+- **Model:** `openai/gpt-oss-120b` on Groq, set with the `GROQ_MODEL` variable (the code default is
+  `llama-3.3-70b-versatile`). The model used is recorded in `data/messages.json`.
+- **Service:** `outreach/llm_service.py` wraps the API with bounded retries, exponential backoff, `Retry-After`
+  support and separate errors for missing keys, fatal API errors, transient errors and empty responses.
+- **Prompt:** a system prompt (`SYSTEM_PROMPT` in `outreach/messaging.py`) asks for a JSON object
+  `{"subject", "email", "dm"}` with these rules: email 60–90 words including greeting and sign-off, DM 15–30 words,
+  subject at most 10 words, use only the facts supplied, quote only exact video titles, never claim to have watched
+  or loved specific content, no placeholders, brackets or links. The user prompt is the sender and creator facts as JSON.
+
+## Personalization logic
+
+Only verified facts are sent to the model: creator name, platform, niche, content themes, up to three recent video
+titles, and the sender's name, brand, brand description and collaboration type (UGC content creation). The creator's
+email address, description and metrics are never sent.
+
+**Validation and retries.** Each reply is parsed and checked: email 60–90 words, DM 15–30 words, subject at most 12
+words, no placeholders or links, and any quoted text must be a provided video title. On failure the problems are fed
+back to the model, for up to 3 attempts.
+
+**Fallback.** If all attempts fail, or the creator has no themes or video titles, a deterministic template that uses
+facts only is saved. It passes the same word limits and is labelled `fallback_template`; the dashboard shows it as
+**Standard template**, never as AI-generated. Valid AI messages are labelled **AI-generated**.
+
+**Batch generation (CLI)**
+
+```bash
+python -m outreach.messaging --limit 2    # at most 2 creators
+python -m outreach.messaging              # all qualified creators without a valid message
+python -m outreach.messaging --force      # regenerate even if a valid message exists
+```
+
+**On-demand generation in the dashboard.** In **Creator review**, choose any qualified creator:
+
+- With no message or only a template, click **Generate AI Message**.
+- With a valid AI message, the stored message is shown and no API call is made unless you click
+  **Regenerate AI message**.
+
+Only the selected creator is processed, using the same prompt, validation, retries and fallback. The result is saved
+to `data/messages.json` and the tracker is refreshed. A failed regeneration never replaces a valid message, and no
+Groq call happens unless a button is clicked.
+
+![Message preview](docs/screenshots/message-preview.png)
+
+## Sending mechanism
+
+- **Email:** simulation by default. **Simulate sending this email** records a `simulated` outcome, labelled
+  "Simulated (not sent)", and no email leaves the machine. Real SMTP sending exists in the code but is off unless it
+  is explicitly enabled; the dashboard then shows a warning banner and requires a confirmation checkbox.
+- **Instagram DM:** never sent by the system. Use **Copy DM**, send it yourself in Instagram, then click
+  **Mark DM as sent manually** or **Mark DM as failed** (optional note).
+- **Tracking:** every action is stored in an outreach log (channel, mode, status, recipient, error, note) and shown
+  in **Outreach history**. Statuses: `pending`, `sent`, `simulated`, `failed`, `skipped`.
+- **Duplicate prevention:** database unique indexes allow one active or simulated email per creator and per email
+  address (case-insensitive). A repeat attempt is rejected, and the dashboard disables the button with
+  "This email has already been recorded, so it cannot be repeated." Re-importing data never resets statuses.
+
+![Outreach history](docs/screenshots/outreach-history.png)
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph P1["Phase 1 - python -m outreach.pipeline"]
-        D[Discovery] --> F[Filtering] --> E[Enrichment]
-    end
+    D[Discovery] --> F[Filtering] --> E[Enrichment]
     E --> INF[("data/influencers_all.json")]
-    INF --> MSG["Phase 2 - python -m outreach.messaging"]
-    MSG -->|"prompt + validation + retries"| GROQ[["Groq API"]]
+    INF --> MSG["Message generation"]
+    MSG -->|"prompt, validation, retries"| GROQ[["Groq API"]]
     MSG --> MJ[("data/messages.json")]
     INF --> IMP["POST /import"]
     MJ --> IMP
-    IMP --> DB[("SQLite: influencers, messages, outreach_log")]
-    DB <--> API["FastAPI backend"]
+    IMP --> DB[("SQLite")]
+    DB <--> API["FastAPI"]
     API <--> UI["Streamlit dashboard"]
-    UI -->|"Generate AI Message (one creator)"| GEN["messaging.generate_one()"]
-    GEN --> GROQ
-    GEN --> MJ
+    UI -->|"Generate AI Message"| MSG
     UI -->|"simulate email / record DM"| API
 ```
 
-Phase 1 and Phase 2 write JSON files; `POST /import` (the "Import or refresh data" sidebar button) loads them into
-SQLite without resetting outreach statuses. The dashboard reads and writes through the API, except for on-demand
-generation, which calls `outreach.messaging` in the Streamlit process and then triggers `POST /import`.
+Workflow: Discovery → Filtering → Enrichment → AI Personalization → Review → Simulation/Manual sending → Tracking.
 
-## 5. Project Structure
+## Dashboard and API
 
-Only files confirmed from the inspected code are listed; **TODO: replace with the output of `tree -I ".venv|__pycache__"`.**
+Dashboard: **Import or refresh data**, search and filters, KPI cards, creator funnel and outreach progress, creator
+table, **Creator review** (profile, qualification reasons, message preview with copy buttons, statuses, history) and
+a **Run email outreach** tab for batch simulation.
 
-```
-.
-├── outreach/
-│   ├── config.py          # loads .env; DATA_DIR, BRAND_NAME, SENDER_NAME, COLLAB_TYPE, BRAND_DESCRIPTION
-│   ├── models.py          # Influencer, RecentVideo
-│   ├── pipeline.py        # Phase 1 entry point (python -m outreach.pipeline)
-│   ├── llm_service.py     # Groq wrapper: bounded retries, rate-limit aware, typed errors
-│   ├── messaging.py       # Phase 2: prompts, validation, fallback, batch runner, generate_one()
-│   ├── db.py              # SQLite schema + queries, duplicate-outreach constraints
-│   ├── api.py             # FastAPI app (create_app)
-│   ├── view_helpers.py    # dashboard formatting helpers
-│   └── dashboard.py       # Streamlit UI
-├── data/
-│   ├── influencers_all.json   # Phase 1 output (all creators, PASS and FAIL)
-│   └── messages.json          # Phase 2 output
-├── tests/
-├── requirements.txt       # TODO: verify
-├── .env.example           # TODO: verify
-└── README.md
-```
-
-## 6. Influencer Discovery
-
-**TODO – not inspected.** Describe: the YouTube API/data source, search queries or seed strategy, how many creators
-were discovered, and how the minimum of 50 influencers is met (the dashboard KPI "Total creators" shows the number
-imported; the "Qualified" KPI shows how many passed).
-
-## 7. Filtering and Classification
-
-Every creator in `influencers_all.json` carries `filter_status` (`PASS` or `FAIL`) and a list of `filter_reasons`
-(for example `PASS platform: YouTube`, `PASS followers: 12,000` in the dashboard test data). Failed creators are kept in
-the dataset and shown in the dashboard with their reasons ("Why this creator did or did not qualify"), but
-**never receive messages**: Phase 2 and on-demand generation only process `PASS` records.
-
-**TODO – list the exact criteria and thresholds from the filter module** (platform, follower range, engagement,
-niche, recency, country, etc.).
-
-## 8. Profile Enrichment
-
-Fields stored per creator (from the `influencers` table and Phase 1 records): `channel_id`, `name`, `platform`,
-`profile_url`, `niche`, `follower_count`, `engagement_rate`, `content_themes`, `contact_email`, `email_source`,
-`instagram_url`, `website`, `creator_country`, `field_status`, `last_upload_at`, and `recent_videos`
-(id, title, URL, publish date).
-
-- **Missing contact email** is stored as the literal `"Not Found"`; the dashboard shows "No public email found" and email
-  outreach is skipped for that creator.
-- **Missing followers/engagement** are `null` and shown as not available ("Empty followers or engagement means the
-  value is not available from the public API").
-- `field_status` records per-field availability. **TODO: document its values.**
-- **TODO:** how emails/Instagram links are extracted (the dashboard labels the source, e.g. `email_source`).
-
-## 9. AI Message Personalization
-
-**Model and service.** `GroqService` (`llm_service.py`) wraps Groq chat completions with `max_retries=3`, exponential
-backoff (2 s base, 30 s cap), `Retry-After` support, and distinct errors: `MissingAPIKeyError`, `LLMFatalError`
-(auth/bad request – never retried), `LLMTransientError` (rate limit/overload/network), `LLMResponseError` (empty
-response).
-
-**Personalization signals.** Only verified Phase 1 facts are sent to the model: creator name, platform, niche,
-content themes and up to three recent video titles, plus the sender's name, brand, brand description and
-collaboration type. The creator's email address, description and metrics are **not** sent.
-
-**Prompt rules** (system prompt in `messaging.py`): reply with JSON `{subject, email, dm}`; email 60–90 words, DM 15–30
-words, subject ≤ 10 words; use only provided facts; quote only exact video titles; no placeholders, brackets or
-links; never claim to have watched or loved specific content.
-
-**Validation.** Email 60–90 words, DM 15–30 words, subject ≤ 12 words, no placeholders/brackets/links, and any quoted
-text of two or more words must be a provided video title.
-
-**Retries and fallback.** Up to 3 attempts per creator; on failure the validation problems are fed back to the model.
-If all attempts fail, a deterministic template is used (facts only, also validated against the same word limits) and
-labelled `source: fallback_template` with status `fallback_after_invalid_output`. With no themes or video titles the
-model is not called (`fallback_insufficient_context`). Templates are shown in the dashboard as **"Standard template"**
-and never as AI-generated.
-
-**Batch generation (CLI).**
-
-```bash
-python -m outreach.messaging                 # all qualified creators without a valid message
-python -m outreach.messaging --limit 2       # at most 2 creators
-python -m outreach.messaging --force         # regenerate even if a valid message exists
-```
-
-Other flags: `--input`, `--output`, `--delay`, `--model`. Valid messages are reused on re-runs; the run stops after 3
-consecutive API failures or on a fatal API error, keeping progress.
-
-**On-demand generation for one creator (dashboard).** Select a qualified creator in "Creator review":
-
-- No message, or only a template → **Generate AI Message**.
-- Valid AI message already stored → it is displayed, with an explicit **Regenerate AI message** button.
-
-A click generates for **that creator only** via `messaging.generate_one()`, using the same prompt, validation, retry
-and fallback logic. A valid existing message is reused with no API call unless regeneration is requested, and a failed
-regeneration never overwrites a valid message. The result is saved to `messages.json`, then `POST /import` refreshes
-the tracker. No Groq call happens unless the button is clicked.
-
-## 10. Sending Layer and Outreach Tracking
-
-- **Email:** the default is **simulation**: the action records a `simulated` outcome and no email leaves the machine.
-  The code also contains an SMTP mode that is only active when real sending is explicitly enabled (the dashboard then
-  shows a "REAL SENDING IS ENABLED" banner and requires a confirmation checkbox per send). **TODO: document how it is
-  enabled and its variables, or state that it was not used for the submission.**
-- **Instagram DM:** never sent by the system. Copy the DM, send it manually in Instagram, then click "Mark DM as sent
-  manually" or "Mark DM as failed" (optional note).
-- **Statuses** (`outreach_log`): `pending`, `sent`, `simulated`, `failed`, `skipped`; channels `email` and
-  `instagram_dm`; modes `simulation`, `smtp`, `manual`. The dashboard labels simulated outcomes as
-  "Simulated (not sent)".
-- **Duplicate prevention** is enforced by the database: partial UNIQUE indexes allow only one active
-  (`pending`/`sent`) or `simulated` record per creator and channel, and one per email address
-  (case-insensitive). A second attempt raises `DuplicateOutreach`. Re-importing data never resets statuses.
-
-## 11. Dashboard and API
-
-**Dashboard sections:** sidebar (import/refresh, search, filters); KPI cards and creator funnel; a creator table;
-"Creator review" (profile, qualification reasons, message preview with copy buttons, status badges, outreach history);
-and a "Run email outreach" tab (batch simulation with a per-run maximum).
-
-**API endpoints used by the dashboard** (confirmed from `dashboard.py`; **TODO: verify the full list in `api.py` and
-FastAPI's `/docs`**):
+API endpoints used by the dashboard:
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/config` | email mode and whether real sending is on |
-| GET | `/influencers` | list; filters `qualification`, `platform`, `email_status`, `dm_status` |
-| GET | `/influencers/{channel_id}` | one creator + outreach history |
+| GET | `/influencers` | list creators (filters: qualification, platform, email status, DM status) |
+| GET | `/influencers/{channel_id}` | one creator with history |
 | GET | `/stats` | KPI and funnel counts |
 | POST | `/import` | load the JSON files into SQLite |
-| POST | `/outreach/email/{channel_id}` | simulate (or send) one email, body `{"confirm": bool}` |
-| POST | `/outreach/email/run` | batch run, body `{"limit": int, "confirm": bool}` |
-| POST | `/outreach/dm/{channel_id}/status` | record manual DM outcome, body `{"status", "note"}` |
+| POST | `/outreach/email/{channel_id}` | simulate (or send) one email |
+| POST | `/outreach/email/run` | batch run with a limit |
+| POST | `/outreach/dm/{channel_id}/status` | record the manual DM outcome |
 
-## 12. Installation and Setup (Windows, Git Bash)
+FastAPI's interactive docs are available at `http://127.0.0.1:8000/docs` while the API is running.
+
+## Sample output
+
+Creator shown in the dashboard: **Devendra Singh** – YouTube, Fashion & Beauty, 88,900 followers, 2.53% engagement,
+themes "Skincare" and "Haircare & styling", status Qualified, public contact email available.
+
+Standard-template message (labelled as such, 80-word email, 18-word DM):
+
+> **Subject:** Collaboration idea for Devendra Singh
+> **DM:** Hi Devendra Singh, Vidushi from StyleNest here. We'd love to chat about a UGC content creation
+> collaboration. Interested?
+
+Clicking **Generate AI Message** replaces a template with a personalised AI message labelled **AI-generated**.
+
+## Project structure
+
+```
+outreach/
+  config.py        settings loaded from .env
+  models.py        Influencer, RecentVideo
+  pipeline.py      Phase 1: discovery, filtering, enrichment
+  llm_service.py   Groq wrapper (retries, typed errors)
+  messaging.py     prompts, validation, fallback, batch + single-creator generation
+  db.py            SQLite schema, queries, duplicate prevention
+  api.py           FastAPI backend
+  view_helpers.py  dashboard formatting helpers
+  dashboard.py     Streamlit UI
+data/              influencers_all.json, messages.json
+tests/             pytest suites
+docs/screenshots/  dashboard screenshots used in this README
+```
+
+## Setup instructions (Windows, Git Bash)
 
 ```bash
-git clone <your-repo-url> stylenest-outreach
+git clone <your-repository-url> stylenest-outreach
 cd stylenest-outreach
 python -m venv .venv
 source .venv/Scripts/activate
 pip install -r requirements.txt
-cp .env.example .env        # then edit .env with your own values
+cp .env.example .env
 ```
 
-Environment variables confirmed from the code (set values yourself; never commit `.env`):
+Edit `.env` with your own values (never commit it). Main variables: `GROQ_API_KEY`, `GROQ_MODEL`, `BRAND_NAME`,
+`SENDER_NAME`, plus the other keys listed in `.env.example`. The dashboard reads `API_URL`
+(default `http://127.0.0.1:8000`).
 
-| Variable | Purpose |
-|---|---|
-| `GROQ_API_KEY` | Groq API key (required for message generation) |
-| `GROQ_MODEL` | optional model override |
-| `BRAND_NAME`, `SENDER_NAME` | required for message generation |
-| `COLLAB_TYPE`, `BRAND_DESCRIPTION` | optional sender context (**TODO: confirm names in `.env.example`**) |
-| `API_URL` | dashboard → API address, default `http://127.0.0.1:8000` |
-
-**TODO:** add the YouTube key variable and any SMTP/database path variables from `.env.example`.
-
-Run (two terminals, venv active in each):
+Run (two terminals, virtual environment active in each):
 
 ```bash
-# 0) once: build the datasets (needs the discovery credentials from .env)
+# optional: rebuild the datasets and pre-generate a few messages
 python -m outreach.pipeline
-python -m outreach.messaging --limit 2        # optional: pre-generate a few messages
+python -m outreach.messaging --limit 2
 
-# 1) API
+# terminal 1 - API
 uvicorn outreach.api:create_app --factory
 
-# 2) Dashboard
+# terminal 2 - dashboard (opens http://localhost:8501)
 streamlit run outreach/dashboard.py
 ```
 
-In the dashboard sidebar, click **Import or refresh data** the first time.
+On first launch, click **Import or refresh data** in the dashboard sidebar.
 
-## 13. Running Tests
+## Running tests
 
 ```bash
 python -m pytest -q
 ```
 
-Tests use mocked Groq clients and fake APIs; they need no network, Groq key or SMTP server. Inspected suites cover:
-the Groq wrapper (retries, `Retry-After`, fatal vs transient errors, empty responses); message validation, parsing,
-retry, fallback and resumable batch runs; on-demand single-creator generation; message-to-creator matching by
-`channel_id`, import idempotency and duplicate-outreach constraints; dashboard rendering, simulation, error display
-and AI-vs-template labelling; and dashboard helper functions. Run the command above to get the current pass count.
+Tests use mocked Groq clients and fake APIs, so they need no network, API key or SMTP server. They cover the Groq
+wrapper (retries, errors, empty responses), message parsing, validation, fallback and batch runs, single-creator
+generation, message-to-creator matching, import idempotency, duplicate-outreach prevention and the dashboard.
 
-## 14. Sample Outputs
+## Limitations
 
-**TODO – paste real excerpts from `data/influencers_all.json` and `data/messages.json`** (do not invent values).
-Each message record in `messages.json` has this shape:
+- Email is simulated by default and Instagram DMs are manual; there is no automatic Instagram sending.
+- Only public YouTube data is used. Follower, engagement and contact-email coverage depends on what creators publish
+  (24 of 53 qualified creators have a public email).
+- AI messages use only the supplied facts (name, themes, recent video titles); they do not analyse video content.
+- Creators without themes or video titles receive a standard template instead of an AI message.
+- Groq rate limits can interrupt batch generation; re-running resumes and reuses valid messages.
+- On-demand generation runs inside the Streamlit process, so the Groq key must be available to it.
+- The system is for local use and has no authentication or deployment.
 
-```json
-{
-  "channel_id": "...", "name": "...", "contact_email": "...",
-  "subject": "...", "email": "...", "dm": "...",
-  "email_word_count": 0, "dm_word_count": 0,
-  "source": "llm | fallback_template",
-  "validation_status": "valid | fallback_insufficient_context | fallback_after_invalid_output | error | invalid",
-  "attempts": 0, "model": "...", "error": null, "generated_at": "ISO-8601 timestamp"
-}
-```
+## Assignment requirements checklist
 
-Add dashboard screenshots only if the files exist, e.g. `docs/screenshots/<file>.png`.
-
-## 15. Limitations and Future Improvements
-
-Current limitations:
-
-- Nothing is auto-sent: Instagram DMs are manual, and email is simulated unless real sending is enabled.
-- AI messages use only Phase 1 facts (name, themes, recent video titles); they have no deeper content understanding.
-- A creator with no themes or video titles gets a template, not an AI message.
-- Free-tier Groq rate limits can interrupt batch runs (resumable by re-running).
-- On-demand generation runs in the Streamlit process, so it needs `GROQ_API_KEY` there, unlike other actions
-  that go through the API.
-- No authentication or deployment; local use only. **TODO: add data-source limits (e.g. API quotas, public-email coverage).**
-
-Ideas (not implemented): an API endpoint for single-creator generation, Instagram data enrichment, reply tracking.
-
-## 16. Assignment Requirements Checklist
-
-Requirement wording is taken from your brief; **TODO: confirm against the assignment PDF.**
-
-| Requirement | Implementation | Status |
-|---|---|---|
-| Discover 50+ influencers | Phase 1 pipeline → `influencers_all.json` | TODO verify count |
-| Filter / classify qualified creators | `filter_status`, `filter_reasons` | Implemented; criteria TODO |
-| Enrich profiles | Contact email, Instagram, website, themes, recent videos | Implemented; sources TODO |
-| Personalised email (60–90 words) | `messaging.py`, enforced by `validate_messages` | Implemented |
-| Personalised Instagram DM (15–30 words) | same | Implemented |
-| Sending layer | Simulated email; manual DM workflow | Implemented |
-| Outreach tracking | `outreach_log`, dashboard statuses/history | Implemented |
-| Duplicate prevention | DB unique indexes | Implemented |
-| Dashboard | Streamlit | Implemented |
-
-## 17. Submission Contents
-
-- Source repository (without `.env`, `.venv`, local database files)
-- `.env.example` and `requirements.txt`
-- `data/influencers_all.json` (50+ creators) and `data/messages.json` (sample messages)
-- This `README.md`
-- Demo materials: screen recording and/or screenshots — **TODO: add file names or links**
+| Requirement | Where it is implemented |
+|---|---|
+| Discover 50+ influencers | 391 discovered, 53 qualified (`data/influencers_all.json`) |
+| Filter / classify | `filter_status` and `filter_reasons`, shown in the dashboard |
+| Profile enrichment | Contact email, themes, recent videos, Instagram, website, country |
+| Personalised email (60–90 words) | `outreach/messaging.py`, enforced by validation |
+| Personalised Instagram DM (15–30 words) | `outreach/messaging.py`, enforced by validation |
+| Sending layer | Simulated email, manual Instagram DM |
+| Outreach tracking and duplicate prevention | `outreach_log` table, unique indexes, dashboard history |
+| Dashboard | Streamlit app (`outreach/dashboard.py`) |
+| Documentation | This README |
